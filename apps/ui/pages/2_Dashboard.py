@@ -24,6 +24,22 @@ with col2:
     except Exception:
         st.metric("Projects", 0)
 
+st.subheader("Create Project")
+with st.form("create_project"):
+    name = st.text_input("Name")
+    description = st.text_input("Description")
+    submitted = st.form_submit_button("Create", use_container_width=True)
+
+if submitted:
+    if not name.strip():
+        st.warning("Project name is required.")
+    else:
+        try:
+            created = client.create_project(name=name.strip(), description=description.strip() or None)
+            st.success(f"Created project {created['name']} ({created['id'][:8]}).")
+        except Exception as exc:
+            st.error(f"Could not create project: {exc}")
+
 st.subheader("Recent Projects")
 try:
     projects = client.list_projects()
