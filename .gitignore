@@ -36,3 +36,5 @@ build/
 
 # Mypy
 .mypy_cache/
+# Local SQLite
+*.db
