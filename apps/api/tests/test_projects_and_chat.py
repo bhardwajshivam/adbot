@@ -43,7 +43,8 @@ def test_seed_and_chat_returns_matches(client):
     body = chat_response.json()
     assert "Project 'Project Beta' context:" in body["response"]
     assert len(body["matches"]) >= 1
-    assert "budget" in body["matches"][0]["snippet"].lower()
+    assert "budget" in body["matches"][0]["text"].lower()
+    assert body["matches"][0]["reranked_rank"] == 1
 
 
 def test_chat_returns_404_for_missing_project(client):

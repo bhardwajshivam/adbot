@@ -47,7 +47,13 @@ if st.button("Send", use_container_width=True):
             if matches:
                 st.subheader("Matched Context")
                 for idx, match in enumerate(matches, start=1):
-                    st.markdown(f"**{idx}.** `{match['chunk_id']}`")
-                    st.write(match["snippet"])
+                    st.markdown(
+                        f"**{idx}.** `{match['chunk_id']}` "
+                        f"(doc `{match['doc_id']}`, rank {match['original_rank']} -> {match['reranked_rank']})"
+                    )
+                    st.caption(
+                        f"retrieval={match['retrieval_score']:.2f}, reranker={match['reranker_score']:.4f}"
+                    )
+                    st.write(match["text"])
         except Exception as exc:
             st.error(f"Request failed: {exc}")

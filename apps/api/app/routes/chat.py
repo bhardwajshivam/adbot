@@ -1,26 +1,36 @@
-import re
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy import or_
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.db.models.chunk import Chunk
 from app.db.models.project import Project
-from app.db.models.source_object import SourceObject
 from app.dependencies import get_db
+from app.services.rag_pipeline import build_default_pipeline
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+@lru_cache(maxsize=1)
+def get_pipeline():
+    return build_default_pipeline()
 
 
 class ChatRequest(BaseModel):
     project_id: str
     message: str
+    top_k: int | None = Field(default=None, ge=1)
+    top_n: int | None = Field(default=None, ge=1)
 
 
 class ChatMatch(BaseModel):
     chunk_id: str
-    snippet: str
+    doc_id: str
+    text: str
+    retrieval_score: float
+    reranker_score: float
+    original_rank: int
+    reranked_rank: int
 
 
 class ChatResponse(BaseModel):
@@ -34,27 +44,20 @@ def chat(payload: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    terms = [term for term in re.findall(r"[A-Za-z0-9_]+", payload.message.lower()) if len(term) > 2][:8]
-    chunk_query = (
-        db.query(Chunk)
-        .join(SourceObject, SourceObject.id == Chunk.source_object_id)
-        .filter(SourceObject.project_id == payload.project_id)
+    pipeline = get_pipeline()
+    pipeline_result = pipeline.run(
+        query=payload.message,
+        project_id=payload.project_id,
+        db=db,
+        top_k=payload.top_k,
+        top_n=payload.top_n,
     )
-    if terms:
-        filters = [Chunk.content.ilike(f"%{term}%") for term in terms]
-        chunk_query = chunk_query.filter(or_(*filters))
-
-    hits = chunk_query.order_by(Chunk.created_at.desc()).limit(3).all()
-    matches = [
-        ChatMatch(
-            chunk_id=hit.id,
-            snippet=(hit.content[:220] + "...") if len(hit.content) > 220 else hit.content,
-        )
-        for hit in hits
-    ]
+    matches = [ChatMatch(**candidate) for candidate in pipeline_result.candidates]
 
     if matches:
-        summary = " | ".join(match.snippet for match in matches)
+        summary = " | ".join(
+            (match.text[:220] + "...") if len(match.text) > 220 else match.text for match in matches
+        )
         response = f"Project '{project.name}' context: {summary}"
     else:
         response = (
