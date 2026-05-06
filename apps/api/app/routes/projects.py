@@ -1,15 +1,27 @@
+from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.models.chunk import Chunk
+from app.db.models.chunk_embedding import ChunkEmbedding
 from app.db.models.project import Project
 from app.db.models.source_object import SourceObject
 from app.dependencies import get_db
+from app.services.embeddings import build_default_embedder
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@lru_cache(maxsize=1)
+def get_embedder():
+    return build_default_embedder(
+        model_name=settings.embedding_model_name,
+        dimensions=settings.embedding_dimensions,
+    )
 
 
 class ProjectCreate(BaseModel):
@@ -35,6 +47,7 @@ class SourceSeedRequest(BaseModel):
 class SourceSeedResponse(BaseModel):
     source_object_id: str
     chunk_id: str
+    embedding_id: str | None = None
 
 
 @router.get("", response_model=list[ProjectRead])
@@ -75,8 +88,21 @@ def seed_project_source(
 
     chunk = Chunk(source_object_id=source_object.id, content=payload.content)
     db.add(chunk)
+    db.flush()
+
+    if settings.vector_retrieval_enabled:
+        embedder = get_embedder()
+        chunk_embedding = ChunkEmbedding(
+            chunk_id=chunk.id,
+            model_name=embedder.model_name,
+            embedding=embedder.embed_texts([payload.content])[0],
+        )
+        db.add(chunk_embedding)
+        db.flush()
+        chunk.embedding_id = chunk_embedding.id
+
     db.commit()
     db.refresh(source_object)
     db.refresh(chunk)
 
-    return SourceSeedResponse(source_object_id=source_object.id, chunk_id=chunk.id)
+    return SourceSeedResponse(source_object_id=source_object.id, chunk_id=chunk.id, embedding_id=chunk.embedding_id)

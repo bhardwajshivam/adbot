@@ -25,6 +25,11 @@ class Settings:
         )
     )
     retrieval_top_k: int = field(default_factory=lambda: int(os.getenv("RETRIEVAL_TOP_K", "10")))
+    vector_retrieval_enabled: bool = field(default_factory=lambda: _get_bool("VECTOR_RETRIEVAL_ENABLED", True))
+    embedding_model_name: str = field(
+        default_factory=lambda: os.getenv("EMBEDDING_MODEL_NAME", "hashing:384")
+    )
+    embedding_dimensions: int = field(default_factory=lambda: int(os.getenv("EMBEDDING_DIMENSIONS", "384")))
     reranker_enabled: bool = field(default_factory=lambda: _get_bool("RERANKER_ENABLED", True))
     reranker_model_name: str = field(
         default_factory=lambda: os.getenv(

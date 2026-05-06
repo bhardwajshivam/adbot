@@ -19,3 +19,4 @@ class Chunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     source_object = relationship("SourceObject", back_populates="chunks")
+    embedding = relationship("ChunkEmbedding", back_populates="chunk", cascade="all, delete-orphan", uselist=False)
